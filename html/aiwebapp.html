@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <a href="../index.html">Return to Home Page</a>
+  <title>Checkers Game</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      background-color: #f4f4f4;
+    }
+
+    #board {
+      display: grid;
+      grid-template-columns: repeat(8, 60px);
+      grid-template-rows: repeat(8, 60px);
+      gap: 1px;
+      border: 2px solid #333;
+    }
+
+    .square {
+      width: 60px;
+      height: 60px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .square.dark {
+      background-color: #333;
+    }
+
+    .square.light {
+      background-color: #f2f2f2;
+    }
+
+    .piece {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+    }
+
+    .piece.red {
+      background-color: red;
+    }
+
+    .piece.black {
+      background-color: black;
+    }
+
+    .piece.selected {
+      border: 3px solid yellow;
+    }
+
+    .king {
+      border: 3px solid gold;
+    }
+
+    #status {
+      margin-top: 20px;
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Checkers Game</h1>
+  <div id="board"></div>
+  <div id="status">Red's turn</div>
+
+  <script>
+    const board = document.getElementById("board");
+    const statusDiv = document.getElementById("status");
+    const boardSize = 8;
+    let currentPlayer = 'red';
+    let selectedPiece = null;
+    let validMoves = [];
+
+    // Initialize the board
+    function createBoard() {
+      for (let row = 0; row < boardSize; row++) {
+        for (let col = 0; col < boardSize; col++) {
+          const square = document.createElement("div");
+          square.classList.add("square");
+          square.dataset.row = row;
+          square.dataset.col = col;
+
+          if ((row + col) % 2 === 1) {
+            square.classList.add("dark");
+            if (row < 3) {
+              const piece = createPiece('black', row, col);
+              square.appendChild(piece);
+            } else if (row > 4) {
+              const piece = createPiece('red', row, col);
+              square.appendChild(piece);
+            }
+          } else {
+            square.classList.add("light");
+          }
+
+          square.addEventListener("click", handleSquareClick);
+          board.appendChild(square);
+        }
+      }
+    }
+
+    // Create a piece
+    function createPiece(color, row, col) {
+      const piece = document.createElement("div");
+      piece.classList.add("piece", color);
+      piece.dataset.row = row;
+      piece.dataset.col = col;
+      return piece;
+    }
+
+    // Handle square click
+    function handleSquareClick(event) {
+      const square = event.currentTarget;
+      const row = parseInt(square.dataset.row);
+      const col = parseInt(square.dataset.col);
+
+      if (selectedPiece) {
+        // Try to move the piece
+        if (isValidMove(row, col)) {
+          movePiece(selectedPiece, square);
+          endTurn();
+        } else {
+          deselectPiece();
+        }
+      } else if (square.children.length > 0) {
+        const piece = square.children[0];
+        if (piece.classList.contains(currentPlayer)) {
+          selectPiece(piece);
+        }
+      }
+    }
+
+    // Select a piece
+    function selectPiece(piece) {
+      deselectPiece();
+      selectedPiece = piece;
+      selectedPiece.classList.add("selected");
+      calculateValidMoves(parseInt(piece.dataset.row), parseInt(piece.dataset.col));
+    }
+
+    // Deselect the selected piece
+    function deselectPiece() {
+      if (selectedPiece) {
+        selectedPiece.classList.remove("selected");
+        selectedPiece = null;
+        validMoves = [];
+      }
+    }
+
+    // Calculate valid moves for the selected piece
+    function calculateValidMoves(row, col) {
+      validMoves = [];
+
+      const directions = currentPlayer === 'red' ? [[-1, -1], [-1, 1]] : [[1, -1], [1, 1]];
+      if (selectedPiece.classList.contains("king")) {
+        directions.push(...directions.map(([dr, dc]) => [-dr, -dc]));
+      }
+
+      for (const [dr, dc] of directions) {
+        const newRow = row + dr;
+        const newCol = col + dc;
+        const targetSquare = getSquare(newRow, newCol);
+
+        if (targetSquare && targetSquare.children.length === 0) {
+          validMoves.push([newRow, newCol]);
+        } else if (targetSquare && targetSquare.children[0].classList.contains(opponentColor())) {
+          const jumpRow = newRow + dr;
+          const jumpCol = newCol + dc;
+          const jumpSquare = getSquare(jumpRow, jumpCol);
+
+          if (jumpSquare && jumpSquare.children.length === 0) {
+            validMoves.push([jumpRow, jumpCol, targetSquare.children[0]]);
+          }
+        }
+      }
+    }
+
+    // Check if a move is valid
+    function isValidMove(row, col) {
+      return validMoves.some(([r, c]) => r === row && c === col);
+    }
+
+    // Move a piece
+    function movePiece(piece, targetSquare) {
+      const fromSquare = getSquare(parseInt(piece.dataset.row), parseInt(piece.dataset.col));
+      fromSquare.removeChild(piece);
+      targetSquare.appendChild(piece);
+
+      piece.dataset.row = targetSquare.dataset.row;
+      piece.dataset.col = targetSquare.dataset.col;
+
+      // Check for jumps and remove captured piece
+      const move = validMoves.find(([r, c]) => r === parseInt(targetSquare.dataset.row) && c === parseInt(targetSquare.dataset.col));
+      if (move && move[2]) {
+        move[2].parentElement.removeChild(move[2]);
+      }
+
+      // Promote to king
+      if (
+        (currentPlayer === 'red' && targetSquare.dataset.row == 0) ||
+        (currentPlayer === 'black' && targetSquare.dataset.row == 7)
+      ) {
+        piece.classList.add("king");
+      }
+    }
+
+    // Get square by row and column
+    function getSquare(row, col) {
+      return document.querySelector(`.square[data-row="${row}"][data-col="${col}"]`);
+    }
+
+    // End the turn
+    function endTurn() {
+      deselectPiece();
+      currentPlayer = currentPlayer === 'red' ? 'black' : 'red';
+      statusDiv.textContent = `${currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)}'s turn`;
+    }
+
+    // Get opponent's color
+    function opponentColor() {
+      return currentPlayer === 'red' ? 'black' : 'red';
+    }
+
+    // Initialize the game
+    createBoard();
+  </script>
+</body>
+</html>
